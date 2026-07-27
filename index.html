@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Game Tangkap Bintang</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      background: #1a1a2e;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    #game-container {
+      position: relative;
+      width: 100%;
+      max-width: 420px;
+      height: 90vh;
+      max-height: 700px;
+      background: linear-gradient(to bottom, #0f3460, #16213e);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #ui {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      right: 15px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 18px;
+      font-weight: bold;
+      pointer-events: none;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+    }
+    #game-over-screen {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+    .btn {
+      background: #e94560;
+      color: white;
+      border: none;
+      padding: 12px 28px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(233, 69, 96, 0.4);
+      transition: transform 0.1s;
+    }
+    .btn:active {
+      transform: scale(0.95);
+    }
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <div id="ui">
+      <div>Skor: <span id="score">0</span></div>
+      <div>Nyawa: <span id="lives">❤️❤️❤️</span></div>
+    </div>
+
+    <div id="game-over-screen">
+      <h1>Game Over!</h1>
+      <p>Skor Akhir: <span id="final-score">0</span></p>
+      <button class="btn" onclick="startGame()">Main Lagi</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const finalScoreEl = document.getElementById('final-score');
+
+    let width, height;
+    let player, stars, score, lives, gameActive;
+
+    function resize() {
+      const container = document.getElementById('game-container');
+      width = canvas.width = container.clientWidth;
+      height = canvas.height = container.clientHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function startGame() {
+      score = 0;
+      lives = 3;
+      gameActive = true;
+      stars = [];
+      
+      player = {
+        x: width / 2 - 30,
+        y: height - 50,
+        w: 60,
+        h: 15,
+        speed: 8
+      };
+
+      scoreEl.textContent = score;
+      updateLivesDisplay();
+      gameOverScreen.classList.add('hidden');
+      
+      requestAnimationFrame(gameLoop);
+    }
+
+    function updateLivesDisplay() {
+      livesEl.textContent = '❤️'.repeat(Math.max(0, lives));
+    }
+
+    // Kontrol Sentuh (Touch) & Mouse
+    let isTouching = false;
+    let touchX = 0;
+
+    function handleMove(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      player.x = clientX - rect.left - player.w / 2;
+      
+      // Batasi pemain agar tidak keluar layar
+      if (player.x < 0) player.x = 0;
+      if (player.x + player.w > width) player.x = width - player.w;
+    }
+
+    canvas.addEventListener('touchstart', (e) => { isTouching = true; handleMove(e); });
+    canvas.addEventListener('touchmove', (e) => { if (isTouching) handleMove(e); });
+    canvas.addEventListener('touchend', () => { isTouching = false; });
+    canvas.addEventListener('mousemove', (e) => { handleMove(e); });
+
+    function spawnStar() {
+      if (Math.random() < 0.03) {
+        stars.push({
+          x: Math.random() * (width - 20) + 10,
+          y: -20,
+          size: 15,
+          speed: 2 + Math.random() * 3 + score * 0.1
+        });
+      }
+    }
+
+    function update() {
+      spawnStar();
+
+      for (let i = stars.length - 1; i >= 0; i--) {
+        let s = stars[i];
+        s.y += s.speed;
+
+        // Cek benturan dengan keranjang/pemain
+        if (
+          s.y + s.size >= player.y &&
+          s.x >= player.x &&
+          s.x <= player.x + player.w
+        ) {
+          score += 10;
+          scoreEl.textContent = score;
+          stars.splice(i, 1);
+          continue;
+        }
+
+        // Bintang jatuh ke bawah layar (luput)
+        if (s.y > height) {
+          lives--;
+          updateLivesDisplay();
+          stars.splice(i, 1);
+
+          if (lives <= 0) {
+            gameActive = false;
+            finalScoreEl.textContent = score;
+            gameOverScreen.classList.remove('hidden');
+          }
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+
+      // Gambar Keranjang/Pemain
+      ctx.fillStyle = '#00fff5';
+      ctx.beginPath();
+      ctx.roundRect(player.x, player.y, player.w, player.h, 8);
+      ctx.fill();
+
+      // Gambar Bintang
+      ctx.fillStyle = '#ff0';
+      stars.forEach(s => {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function gameLoop() {
+      if (!gameActive) return;
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    startGame();
+  </script>
+</body>
+</html>
